@@ -1,5 +1,57 @@
 import numpy as np
 
+class UserInput:
+    def init(self):
+        self.C = None  # A vector of coefficients of objective function
+        self.A = None  # A matrix of coefficients of constraint function
+        self.b = None  # A vector of right-hand side numbers
+        self.a = None  # The approximation accuracy
+        self.size = []
+        self.max_problem = True
+        self.x = None
+
+    def collect_data(self):
+        print("This program is designed to solve Linear Programming Problems (LPP) for both maximization "
+              "and minimization objectives (in standart form).")
+        self.input_type_of_problem()
+        self.input_C()
+        self.input_size()
+        self.input_A()
+        self.input_b()
+        self.input_a()
+
+    def input_type_of_problem(self):
+        print("Please specify whether you wish to solve a maximization or minimization problem "
+              "(Enter 'max' for maximization or 'min' for minimization):")
+        type_of_problem = input()
+        if type_of_problem == "min":
+            self.max_problem = False
+
+    def input_size(self):
+        self.size = list(map(int, input("Enter the size of matrix A (example: 4 5): ").split()))
+
+    def input_C(self):
+        self.C = list(map(float, input("Enter vector C (example: 2 3 4 0 0): ").split()))
+        if not self.max_problem:
+            self.C = [-c for c in self.C]
+
+    def input_A(self):
+        self.A = []
+        print("Enter matrix A:\nexample: 4 5 6 1 0\n         5 1 2 0 1")
+        for i in range(self.size[0]):
+            line = list(map(float, input().split()))
+            self.A.append(line)
+
+    def input_b(self):
+        self.b = list(map(float, input("Enter vector b (example: 11 34 20): ").split()))
+
+    def input_a(self):
+        self.a = float(input("Enter approximation accuracy (example: 0.01): "))
+
+    def additional_input_for_interior_point(self):
+        print("For the Interior-Point method you need to find and provide an initial solution "
+              "where all values >= 0.")
+        self.x = list(map(float, input("Enter the initial solution (example: 1 2 3 4 5): ").split()))
 
 class SimplexMethod:
     def __init__(self, size, C, A, b, a):
@@ -97,3 +149,52 @@ class SimplexMethod:
                     min_ratio = ratio
                     leaving_vector_index = i
         return leaving_vector_index
+
+
+class InteriorPointMethod:
+    def __init__(self, size, C, A, b, a, alpha, x):
+        self.size = size  # size of A
+        self.C = np.array(C).astype(np.float64)  # A vector of coefficients of objective function
+        self.A = np.array(A).astype(np.float64) # A matrix of coefficients of constraint function
+        self.b = np.array(b).astype(np.float64)  # A vector of right-hand side numbers
+        self.a = a # The approximation accuracy
+        self.x = np.array(x).astype(np.float64) # initial solution vector
+        self.alpha = alpha
+        self.x_prev = None  # vector x from previous iteration
+
+    def check_data(self):
+        if any(v < 0 for v in self.x):
+            return False
+        Ax = np.dot(self.A, self.x).astype(np.float64)
+        if not np.allclose(Ax, self.b, rtol=self.a, atol=self.a):
+            return False
+        return True
+
+    def interior_point_method(self):
+        if not self.check_data():   # check that problem is not infeasible
+            return None
+        while True:
+            self.x_prev = self.x.astype(np.float64)
+            D = np.diag(self.x.astype(np.float64))
+            AD = np.dot(self.A, D).astype(np.float64)
+            Dc = np.dot(D, self.C).astype(np.float64)
+
+            I = np.eye(self.size[1], dtype=np.float64)
+
+            F = np.dot(AD, np.transpose(AD)).astype(np.float64)
+            F_inv = np.linalg.inv(F).astype(np.float64)
+            G = np.dot(np.transpose(AD), F_inv).astype(np.float64)
+            P = np.subtract(I, np.dot(G, AD)).astype(np.float64)
+
+            c_p = np.dot(P, Dc).astype(np.float64)
+            nu = np.max(np.absolute(c_p).astype(np.float64))
+
+            y = np.add(np.ones(self.size[1], dtype=np.float64), (self.alpha / nu) * c_p).astype(np.float64)
+            self.x = np.dot(D, y).astype(np.float64)
+
+            if np.linalg.norm(np.subtract(self.x, self.x_prev), ord=2) < self.a:
+                break
+
+        result = [np.dot(self.C, self.x).astype(np.float64)]
+        result.extend(self.x)
+        return result
